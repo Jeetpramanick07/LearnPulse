@@ -1,4 +1,6 @@
+# =========================
 # Logs
+# =========================
 logs
 *.log
 npm-debug.log*
@@ -7,57 +9,54 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# =========================
+# OS Files
+# =========================
 .DS_Store
+Thumbs.db
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+!.vscode/extensions.json
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
+# =========================
+# Node
+# =========================
+node_modules/
+frontend/node_modules/
+dist/
+dist-ssr/
+frontend/dist/
+*.local
+
+# =========================
 # Python
+# =========================
 __pycache__/
 *.pyc
 *.pkl
-
-# Environment variables
-.env
-backend/.env
-
-# Python virtual environment
 venv/
 backend/venv/
-
-# Python
-backend/venv/
 backend/__pycache__/
-*.pyc
 
-# Node
-frontend/node_modules/
-frontend/dist/
-
-# Firebase
-frontend/.firebase/
-
-# Environment variables
+# =========================
+# Environment Files
+# =========================
 .env
 frontend/.env
 backend/.env
 
-# OS
-.DS_Store
-Thumbs.db
-
-backend/app/firebase_service_account..json
-
+# =========================
+# Firebase
+# =========================
+frontend/.firebase/
 backend/app/firebase_service_account.json
 backend/app/firebase_service_account..json
