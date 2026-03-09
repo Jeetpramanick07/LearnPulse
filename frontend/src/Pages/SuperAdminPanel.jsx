@@ -25,9 +25,9 @@ const db   = getFirestore(app);
 const auth = getAuth(app);
 
 // ─── Backend API config ───────────────────────────────────────────────────────
-// Change this to your deployed FastAPI URL in production
-const BACKEND_URL    = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-const ADMIN_SECRET   = "superadmin123"; // must match ADMIN_SECRET_KEY in your .env
+// 👇 Replace this URL with your actual Render deployment URL
+const BACKEND_URL  = import.meta.env.VITE_BACKEND_URL || "https://learnpulse-backend.onrender.com";
+const ADMIN_SECRET = "superadmin123"; // must match ADMIN_SECRET_KEY in your backend .env
 
 /** Helper: call admin_routes.py endpoints with the X-Admin-Key header */
 async function adminAPI(method, path, body = null) {
@@ -274,7 +274,6 @@ function AddUserModal({ onClose, addLog, showToast }) {
   const handle = async () => {
     setLoading(true); setErr("");
     try {
-      // Backend creates Auth account + Firestore doc atomically — no signOut needed
       await adminAPI("POST", "/user", {
         name:     form.name,
         email:    form.email,
@@ -320,7 +319,8 @@ function DeleteConfirmModal({ user, onClose, onConfirm }) {
           Delete <strong>{user.name || user.id}</strong>?
         </p>
         <p style={{ color: "#64748b", fontSize: "13px", fontFamily: "'DM Sans', sans-serif" }}>
-          This permanently removes their <strong style={{ color: "#f87171" }}>Firebase Auth account</strong>{" "}
+          This permanently removes their{" "}
+          <strong style={{ color: "#f87171" }}>Firebase Auth account</strong>{" "}
           and <strong style={{ color: "#f87171" }}>Firestore document</strong> via the backend.
           They will no longer be able to log in. This cannot be undone.
         </p>
@@ -356,32 +356,25 @@ function StatCard({ icon, label, value, delta }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SuperAdminPanel({ onClose }) {
-  // ── Super-admin key gate (separate from Firebase Auth) ──
   const [authed,    setAuthed]    = useState(false);
   const [authInput, setAuthInput] = useState("");
   const [authError, setAuthError] = useState("");
 
-  // ── Live Firestore data ──
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const [logs,    setLogs]    = useState([]);
 
-  // ── Local session activity log ──
-  const [logs, setLogs] = useState([]);
-
-  // ── UI state ──
   const [search,       setSearch]       = useState("");
   const [filterRole,   setFilterRole]   = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [activeTab,    setActiveTab]    = useState("users");
   const [toast,        setToast]        = useState(null);
 
-  // ── Modal state ──
   const [editUser,    setEditUser]    = useState(null);
   const [resetUser,   setResetUser]   = useState(null);
   const [deleteUser,  setDeleteUser]  = useState(null);
   const [showAddUser, setShowAddUser] = useState(false);
 
-  // ── Real-time Firestore listener (activates only after admin auth) ──
   useEffect(() => {
     if (!authed) return;
     const unsub = onSnapshot(
@@ -408,7 +401,6 @@ export default function SuperAdminPanel({ onClose }) {
     }, ...prev.slice(0, 49)]);
   };
 
-  // ── Firestore mutations ──
   const handleSaveEdit = (updated) => {
     const old = users.find(u => u.id === updated.id);
     if (old?.role   !== updated.role)   addLog("Role changed",    `${updated.name}: ${old?.role} → ${updated.role}`, "role");
@@ -420,7 +412,6 @@ export default function SuperAdminPanel({ onClose }) {
   const handleDelete = async (id) => {
     const u = users.find(x => x.id === id);
     try {
-      // Calls backend: deletes Firebase Auth account + Firestore doc
       const result = await adminAPI("DELETE", `/user/${id}`);
       addLog("User fully deleted", u?.name || id, "suspend");
       if (result.warnings?.length) {
@@ -444,13 +435,11 @@ export default function SuperAdminPanel({ onClose }) {
     }
   };
 
-  // ── Derived stats ──
   const totalUsers     = users.length;
   const highRisk       = users.filter(u => u.role === "student" && (u.riskScore ?? 0) >= 70).length;
   const activeCount    = users.filter(u => (u.status ?? "active") === "active").length;
   const suspendedCount = users.filter(u => u.status === "suspended").length;
 
-  // ── Filtered view ──
   const filtered = users.filter(u => {
     const q = search.toLowerCase();
     return (
@@ -465,8 +454,7 @@ export default function SuperAdminPanel({ onClose }) {
   // ════════════════════════════════════════
   if (!authed) {
     const tryAuth = () => {
-      // 🔒 Change this key to whatever you want before going live
-      if (authInput === "superadmin123") { setAuthed(true); setAuthError(""); }
+      if (authInput === ADMIN_SECRET) { setAuthed(true); setAuthError(""); }
       else { setAuthError("Invalid credentials. Access denied."); setAuthInput(""); }
     };
     return (
@@ -496,10 +484,6 @@ export default function SuperAdminPanel({ onClose }) {
               fontFamily: "'DM Sans',sans-serif" }}>{authError}</p>
           )}
           <Btn variant="primary" onClick={tryAuth}>Authenticate</Btn>
-          <p style={{ marginTop: "20px", color: "#334155", fontSize: "11px",
-            fontFamily: "'DM Sans',sans-serif" }}>
-            Change the hardcoded key in source before deploying
-          </p>
         </div>
       </div>
     );
@@ -689,7 +673,7 @@ export default function SuperAdminPanel({ onClose }) {
                               onClick={() => handleToggleStatus(u)}>
                               {u.status === "suspended" ? "✅" : "🚫"}
                             </Btn>
-                            <Btn small variant="danger"   onClick={() => setDeleteUser(u)}>🗑️</Btn>
+                            <Btn small variant="danger" onClick={() => setDeleteUser(u)}>🗑️</Btn>
                           </div>
                         </td>
                       </tr>
@@ -754,7 +738,7 @@ export default function SuperAdminPanel({ onClose }) {
           <div style={{ animation: "slideIn 0.3s ease" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
 
-              {/* Role Distribution — live */}
+              {/* Role Distribution */}
               <div style={{ background: "#0a0e18", border: "1px solid #1e2535",
                 borderRadius: "14px", padding: "24px" }}>
                 <h3 style={{ margin: "0 0 20px", fontFamily: "'Sora',sans-serif",
@@ -831,10 +815,10 @@ export default function SuperAdminPanel({ onClose }) {
                   fontSize: "15px", color: "#e2e8f0" }}>Firebase Services</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px" }}>
                   {[
-                    { name: "Authentication",    ok: true          },
-                    { name: "Firestore",         ok: !loading      },
-                    { name: "Hosting",           ok: true          },
-                    { name: "FastAPI ML Backend",ok: true          },
+                    { name: "Authentication",     ok: true     },
+                    { name: "Firestore",          ok: !loading },
+                    { name: "Hosting",            ok: true     },
+                    { name: "FastAPI ML Backend", ok: true     },
                   ].map(svc => (
                     <div key={svc.name} style={{ background: "#0f1117", borderRadius: "10px",
                       padding: "14px 16px", border: "1px solid #0d1320" }}>
@@ -852,15 +836,15 @@ export default function SuperAdminPanel({ onClose }) {
       </div>
 
       {/* Modals */}
-      {editUser    && <EditUserModal    user={editUser}   onClose={() => setEditUser(null)}   onSave={handleSaveEdit} />}
-      {resetUser   && <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)}  addLog={addLog} showToast={showToast} />}
+      {editUser    && <EditUserModal      user={editUser}   onClose={() => setEditUser(null)}   onSave={handleSaveEdit} />}
+      {resetUser   && <ResetPasswordModal user={resetUser}  onClose={() => setResetUser(null)}  addLog={addLog} showToast={showToast} />}
       {deleteUser  && <DeleteConfirmModal user={deleteUser} onClose={() => setDeleteUser(null)} onConfirm={handleDelete} />}
       {showAddUser && <AddUserModal onClose={() => setShowAddUser(false)} addLog={addLog} showToast={showToast} />}
     </div>
   );
 }
 
-// ─── Global CSS (injected once) ───────────────────────────────────────────────
+// ─── Global CSS ───────────────────────────────────────────────────────────────
 const GLOBAL_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500;600&display=swap');
   * { box-sizing: border-box; }
