@@ -1,5 +1,5 @@
 ﻿import { createContext, useContext, useState, useEffect } from "react";
-import { signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
 
 const AuthContext = createContext();
@@ -10,25 +10,47 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // ✅ Listen to Firebase auth state — if no Firebase session, clear stale localStorage
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        // Firebase session exists → load from localStorage
+        const storedUser = localStorage.getItem("learnpulse_user");
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          // ✅ Only restore if UID matches current Firebase user
+          if (parsed.uid === firebaseUser.uid) {
+            setUser(parsed);
+          } else {
+            // UID mismatch → different user logged in, clear stale data
+            localStorage.removeItem("learnpulse_user");
+            setUser(null);
+          }
+        }
+      } else {
+        // No Firebase session → clear everything
+        localStorage.removeItem("learnpulse_user");
+        setUser(null);
+      }
+      setLoading(false);
+    });
 
-    const storedUser = localStorage.getItem("learnpulse_user");
-
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-
-    setLoading(false);
-
+    return () => unsubscribe();
   }, []);
 
-  // EMAIL LOGIN (Firebase)
+  // EMAIL LOGIN
   const login = async (email, password) => {
+    // ✅ Clear old session before new login
+    localStorage.removeItem("learnpulse_user");
+    setUser(null);
     const result = await signInWithEmailAndPassword(auth, email, password);
     return result.user;
   };
 
-  // GOOGLE LOGIN (Firebase)
+  // GOOGLE LOGIN
   const googleSignIn = async () => {
+    // ✅ Clear old session before new login
+    localStorage.removeItem("learnpulse_user");
+    setUser(null);
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   };
@@ -44,13 +66,14 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
+        setUser,
         login,
         googleSignIn,
         logout,
         loading
       }}
     >
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

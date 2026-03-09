@@ -60,3 +60,5 @@ backend/.env
 frontend/.firebase/
 backend/app/firebase_service_account.json
 backend/app/firebase_service_account..json
+
+serviceAccountKey.json

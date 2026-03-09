@@ -1,28 +1,51 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
-  const { currentUser, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
 
+  // ✅ Read role from both AuthContext AND localStorage as fallback
+  const storedUser = JSON.parse(localStorage.getItem('learnpulse_user') || '{}');
+  const role = user?.role || storedUser?.role || '';
+  const displayName = user?.name || storedUser?.name || user?.email || storedUser?.email || '';
+
+  // Debug: remove this after confirming it works
+  useEffect(() => {
+    console.log('Navbar user:', user);
+    console.log('Navbar role:', role);
+    console.log('Stored user:', storedUser);
+  }, [user]);
+
   const handleLogout = async () => {
     try {
       await logout();
+      localStorage.removeItem('learnpulse_user'); // ✅ Clear on logout
       navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
 
-  const navLinks = [
-    { label: 'Dashboard', path: '/dashboard' },
-    { label: 'Manage Students', path: '/students-management' },
-    { label: 'Marks', path: '/marks-management' },
-    { label: 'Analytics', path: '/analytics' },
+  // Role-based nav links
+  const allLinks = [
+    { label: 'Dashboard',       path: '/dashboard',           roles: ['student', 'faculty', 'hod'] },
+    { label: 'Marks',           path: '/marks-management',    roles: ['student', 'faculty', 'hod'] },
+    { label: 'Manage Students', path: '/students-management', roles: ['faculty', 'hod'] },
+    { label: 'Analytics',       path: '/analytics',           roles: ['faculty', 'hod'] },
+    { label: 'Faculty',         path: '/faculty',             roles: ['hod'] },
   ];
+
+  const navLinks = allLinks.filter(link => link.roles.includes(role));
+
+  const roleLabel = {
+    student: '🎓 Student',
+    faculty: '📚 Faculty',
+    hod:     '🏛️ HOD',
+  }[role] || '';
 
   return (
     <nav className="bg-white border-b border-gray-200">
@@ -53,8 +76,12 @@ export default function Navbar() {
               </button>
             ))}
 
+            <span className="text-xs text-gray-400 border border-gray-200 rounded-full px-3 py-1">
+              {roleLabel}
+            </span>
+
             <span className="text-sm text-gray-600">
-              {currentUser?.displayName || currentUser?.email || 'Faculty'}
+              {displayName}
             </span>
 
             <button
@@ -80,18 +107,15 @@ export default function Navbar() {
             {navLinks.map((link) => (
               <button
                 key={link.path}
-                onClick={() => {
-                  navigate(link.path);
-                  setIsOpen(false);
-                }}
+                onClick={() => { navigate(link.path); setIsOpen(false); }}
                 className="text-left text-sm font-medium text-gray-600 hover:text-purple-600"
               >
                 {link.label}
               </button>
             ))}
 
-            <span className="text-sm text-gray-600">
-              {currentUser?.displayName || currentUser?.email || 'Faculty'}
+            <span className="text-xs text-gray-400">
+              {roleLabel} · {displayName}
             </span>
 
             <button

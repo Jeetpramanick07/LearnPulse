@@ -1,47 +1,15 @@
 const express = require("express");
-
 const router = express.Router();
-
 const auth = require("../middleware/auth");
-
-const teacherOnly = require("../middleware/teacherOnly");
-
+const facultyOrHod = require("../middleware/facultyOrHod");
 const marksController = require("../controllers/marksController");
 
+// All roles can GET (filtered by role inside controller)
+router.get("/", auth, marksController.getMarks);
 
-// STUDENT + TEACHER
-router.get(
-  "/",
-  auth,
-  marksController.getMarks
-);
-
-
-// TEACHER ONLY
-router.post(
-  "/",
-  auth,
-  teacherOnly,
-  marksController.addMarks
-);
-
-
-// TEACHER ONLY
-router.put(
-  "/:id",
-  auth,
-  teacherOnly,
-  marksController.updateMarks
-);
-
-
-// TEACHER ONLY
-router.delete(
-  "/:id",
-  auth,
-  teacherOnly,
-  marksController.deleteMarks
-);
-
+// Only faculty or HOD can write
+router.post("/", auth, facultyOrHod, marksController.addMarks);
+router.put("/:id", auth, facultyOrHod, marksController.updateMarks);
+router.delete("/:id", auth, facultyOrHod, marksController.deleteMarks);
 
 module.exports = router;

@@ -7,13 +7,14 @@ import { db } from "../firebase";
 
 export default function LoginPage() {
 
+  const [selectedRole, setSelectedRole] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login, googleSignIn } = useAuth();
+  const { login, googleSignIn, setUser } = useAuth();
   const navigate = useNavigate();
 
 
@@ -21,6 +22,11 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
 
     e.preventDefault();
+
+    if (!selectedRole) {
+      setError('Please select your role first.');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -41,18 +47,28 @@ export default function LoginPage() {
 
       const userData = userSnap.data();
 
-      // save full user info including role
-      localStorage.setItem("learnpulse_user", JSON.stringify({
+      // *** Block if selected role doesn't match role assigned in Firestore ***
+      if (userData.role !== selectedRole) {
+        throw new Error(`Access denied. You are not registered as ${selectedRole}.`);
+      }
+
+      const userPayload = {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
-        role: userData.role
-      }));
+        role: userData.role,
+        name: userData.name || firebaseUser.email,
+        subjects: userData.subjects || [],
+        department: userData.department || "",
+      };
+
+      localStorage.setItem("learnpulse_user", JSON.stringify(userPayload));
+      setUser(userPayload); // ← update React state immediately
 
       navigate('/dashboard');
 
     } catch (err) {
 
-      setError('Invalid email or password.');
+      setError(err.message || 'Invalid email or password.');
       console.error(err);
 
     } finally {
@@ -83,11 +99,17 @@ export default function LoginPage() {
 
       const userData = userSnap.data();
 
-      localStorage.setItem("learnpulse_user", JSON.stringify({
+      const userPayload = {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
-        role: userData.role
-      }));
+        role: userData.role,
+        name: userData.name || firebaseUser.email,
+        subjects: userData.subjects || [],
+        department: userData.department || "",
+      };
+
+      localStorage.setItem("learnpulse_user", JSON.stringify(userPayload));
+      setUser(userPayload); // ← update React state immediately
 
       navigate('/dashboard');
 
@@ -120,9 +142,38 @@ export default function LoginPage() {
             </h1>
 
             <p className="text-sm text-gray-500">
-              Faculty Portal
+              Sign in to your portal
             </p>
 
+          </div>
+
+
+          {/* ROLE SELECTOR */}
+          <div className="mb-6">
+            <label className="block text-xs font-medium text-gray-700 mb-3 uppercase tracking-wide">
+              I am a...
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'student', label: 'Student', icon: '🎓' },
+                { id: 'faculty', label: 'Faculty', icon: '📚' },
+                { id: 'hod',     label: 'HOD',     icon: '🏛️' },
+              ].map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => { setSelectedRole(r.id); setError(''); }}
+                  className={`flex flex-col items-center gap-1 py-3 px-2 rounded-md border text-xs font-medium transition-all ${
+                    selectedRole === r.id
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                  }`}
+                >
+                  <span className="text-lg">{r.icon}</span>
+                  {r.label}
+                </button>
+              ))}
+            </div>
           </div>
 
 

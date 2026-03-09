@@ -3,10 +3,10 @@ os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-
 
 from app.models import (
     RiskPredictionRequest, RiskPredictionResponse,
@@ -16,17 +16,21 @@ from app.models import (
 from app.firebase_config import get_db
 from app.email_service import send_risk_alert
 from app.ml.predict import predict_risk
+from app.admin_routes import router as admin_router
 
 load_dotenv()
 
+# ── app must be created BEFORE include_router ──────────────────────────────────
 app = FastAPI(title="LearnPulse API", version="2.0.0")
+
+app.include_router(admin_router, prefix="/admin", tags=["admin"])
 
 # -----------------------------
 # CORS
 # -----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -96,12 +100,9 @@ def admin_login(body: AdminLoginRequest):
 
 
 # ============================================================
-# MARKS MANAGEMENT (NEW - RBAC)
+# MARKS MANAGEMENT (RBAC)
 # ============================================================
 
-# -----------------------------
-# TEACHER ADD MARKS
-# -----------------------------
 @app.post("/teacher/add-marks")
 def add_marks(
     student_id: str,
@@ -111,25 +112,16 @@ def add_marks(
 ):
     try:
         db = get_db()
-
         doc = db.collection("marks").add({
             "studentId": student_id,
             "subject": subject,
             "marks": marks
         })
-
-        return {
-            "message": "Marks added successfully",
-            "mark_id": doc[1].id
-        }
-
+        return {"message": "Marks added successfully", "mark_id": doc[1].id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -----------------------------
-# TEACHER UPDATE MARKS
-# -----------------------------
 @app.put("/teacher/update-marks/{mark_id}")
 def update_marks(
     mark_id: str,
@@ -138,20 +130,12 @@ def update_marks(
 ):
     try:
         db = get_db()
-
-        db.collection("marks").document(mark_id).update({
-            "marks": marks
-        })
-
+        db.collection("marks").document(mark_id).update({"marks": marks})
         return {"message": "Marks updated successfully"}
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -----------------------------
-# TEACHER DELETE MARKS
-# -----------------------------
 @app.delete("/teacher/delete-marks/{mark_id}")
 def delete_marks(
     mark_id: str,
@@ -159,64 +143,46 @@ def delete_marks(
 ):
     try:
         db = get_db()
-
         db.collection("marks").document(mark_id).delete()
-
         return {"message": "Marks deleted successfully"}
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -----------------------------
-# STUDENT VIEW OWN MARKS
-# -----------------------------
 @app.get("/student/marks")
 def get_my_marks(identity=Depends(get_student_identity)):
     try:
         db = get_db()
-
         if identity["role"] == "student":
-
             marks = [
                 {**m.to_dict(), "id": m.id}
                 for m in db.collection("marks")
                 .where("studentId", "==", identity["user_id"])
                 .stream()
             ]
-
         else:
-            # teacher/admin can see all
             marks = [
                 {**m.to_dict(), "id": m.id}
                 for m in db.collection("marks").stream()
             ]
-
-        return {
-            "marks": marks,
-            "total": len(marks)
-        }
-
+        return {"marks": marks, "total": len(marks)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================
-# EXISTING RISK SYSTEM (UNCHANGED)
+# RISK PREDICTION
 # ============================================================
 
 @app.post("/predict-risk", response_model=RiskPredictionResponse)
 def predict_student_risk(body: RiskPredictionRequest):
     try:
-
         marks_list = [m.model_dump() for m in body.marks] if body.marks else []
-
         result = predict_risk(
             gpa=body.gpa,
             attendance=body.attendance,
             marks=marks_list
         )
-
         return RiskPredictionResponse(
             student_id=body.student_id,
             risk_score=result["risk_score"],
@@ -224,10 +190,8 @@ def predict_student_risk(body: RiskPredictionRequest):
             confidence=result["confidence"],
             factors=result["factors"],
         )
-
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="ML model not trained.")
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -237,16 +201,13 @@ def predict_student_risk(body: RiskPredictionRequest):
 # -----------------------------
 @app.post("/update-all-risks", response_model=BulkRiskUpdateResponse)
 def update_all_risks(_: bool = Depends(verify_admin)):
-
     try:
-
         db = get_db()
 
         students = [
             s.to_dict() | {"id": s.id}
             for s in db.collection("students").stream()
         ]
-
         all_marks = [
             m.to_dict()
             for m in db.collection("marks").stream()
@@ -256,13 +217,8 @@ def update_all_risks(_: bool = Depends(verify_admin)):
         alerted = 0
 
         for student in students:
-
             sid = student["id"]
-
-            marks = [
-                m for m in all_marks
-                if m.get("studentId") == sid
-            ]
+            marks = [m for m in all_marks if m.get("studentId") == sid]
 
             result = predict_risk(
                 gpa=student.get("gpa", 5.0),
@@ -273,11 +229,9 @@ def update_all_risks(_: bool = Depends(verify_admin)):
             db.collection("students").document(sid).update({
                 "risk": round(result["risk_score"])
             })
-
             updated += 1
 
             if result["risk_score"] >= HIGH_RISK_THRESHOLD:
-
                 sent = send_risk_alert(
                     student_name=student.get("name"),
                     roll=student.get("roll"),
@@ -285,7 +239,6 @@ def update_all_risks(_: bool = Depends(verify_admin)):
                     risk_score=result["risk_score"],
                     risk_level=result["risk_level"]
                 )
-
                 if sent:
                     alerted += 1
 

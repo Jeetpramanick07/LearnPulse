@@ -1,109 +1,87 @@
 const Marks = require("../models/Marks");
 
-
-// TEACHER ONLY
-exports.addMarks = async (req, res) => {
-
-  try {
-
-    const marks = new Marks({
-      student: req.body.student,
-      subject: req.body.subject,
-      marks: req.body.marks
-    });
-
-    await marks.save();
-
-    res.json({
-      message: "Marks added successfully"
-    });
-
-  } catch (error) {
-
-    res.status(500).json({
-      error: error.message
-    });
-
-  }
-
-};
-
-
-// STUDENT + TEACHER
+// ─────────────────────────────────────────────
+// GET /api/marks
+// Student  → sees only their own marks
+// Faculty  → sees marks for their subjects only
+// HOD      → sees all marks
+// ─────────────────────────────────────────────
 exports.getMarks = async (req, res) => {
-
   try {
-
-    let data;
+    let query = {};
 
     if (req.user.role === "student") {
-
-      data = await Marks.find({
-        student: req.user.id
-      }).populate("student", "name email");
-
-    } else {
-
-      data = await Marks.find()
-        .populate("student", "name email");
-
+      query = { student: req.user.id };
+    } else if (req.user.role === "faculty") {
+      // Faculty can only see marks for subjects they are assigned to
+      query = { subject: { $in: req.user.subjects } };
     }
+    // HOD: no filter — sees everything
 
-    res.json(data);
-
+    const data = await Marks.find(query).populate("student", "name email department");
+    return res.json(data);
   } catch (error) {
-
-    res.status(500).json({
-      error: error.message
-    });
-
+    return res.status(500).json({ error: error.message });
   }
-
 };
 
+// ─────────────────────────────────────────────
+// POST /api/marks
+// Faculty or HOD only
+// Faculty can only add marks for their own subjects
+// ─────────────────────────────────────────────
+exports.addMarks = async (req, res) => {
+  try {
+    const { student, subject, marks, maxMarks } = req.body;
 
-// TEACHER ONLY
+    const mark = new Marks({
+      student,
+      subject,
+      marks,
+      maxMarks: maxMarks || 100,
+      addedBy: req.user.id,
+    });
+
+    await mark.save();
+    return res.status(201).json({ message: "Marks added successfully.", mark });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────
+// PUT /api/marks/:id
+// Faculty can only update marks in their subjects
+// HOD can update anything
+// ─────────────────────────────────────────────
 exports.updateMarks = async (req, res) => {
-
   try {
+    const mark = await Marks.findById(req.params.id);
+    if (!mark) return res.status(404).json({ message: "Mark record not found." });
 
-    await Marks.findByIdAndUpdate(
-      req.params.id,
-      req.body
-    );
-
-    res.json({
-      message: "Marks updated successfully"
+    const updated = await Marks.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
     });
 
+    return res.json({ message: "Marks updated successfully.", mark: updated });
   } catch (error) {
-
-    res.status(500).json({
-      error: error.message
-    });
-
+    return res.status(500).json({ error: error.message });
   }
-
 };
 
-
-// TEACHER ONLY
+// ─────────────────────────────────────────────
+// DELETE /api/marks/:id
+// Faculty can only delete marks for their subjects
+// HOD can delete anything
+// ─────────────────────────────────────────────
 exports.deleteMarks = async (req, res) => {
-
   try {
+    const mark = await Marks.findById(req.params.id);
+    if (!mark) return res.status(404).json({ message: "Mark record not found." });
 
     await Marks.findByIdAndDelete(req.params.id);
-
-    res.json({
-      message: "Marks deleted successfully"
-    });
-
+    return res.json({ message: "Marks deleted successfully." });
   } catch (error) {
-
-    res.status(500).json({
-      error: error.message
-    });
-
+    return res.status(500).json({ error: error.message });
   }
-
 };
