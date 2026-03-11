@@ -30,7 +30,12 @@ app.include_router(admin_router, prefix="/admin", tags=["admin"])
 # -----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://learnpulse-2c85d.web.app",          # ✅ Firebase Hosting
+        "https://learnpulse-2c85d.firebaseapp.com",  # ✅ Firebase alternate domain
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
