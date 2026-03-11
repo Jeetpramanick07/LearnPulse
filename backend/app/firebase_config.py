@@ -12,22 +12,18 @@ def get_db():
         return _db
 
     if not firebase_admin._apps:
-        # Option 1: credentials from environment variable (Render / production)
         cred_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
+
         if cred_json:
+            # ✅ Production (Render): load from environment variable
             cred_dict = json.loads(cred_json)
             cred = credentials.Certificate(cred_dict)
-            firebase_admin.initialize_app(cred)
-
-        # Option 2: credentials from local file (local development)
         else:
+            # ✅ Local development: load from serviceAccountKey.json file
             cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", "serviceAccountKey.json")
-            if os.path.exists(cred_path):
-                cred = credentials.Certificate(cred_path)
-                firebase_admin.initialize_app(cred)
-            else:
-                # Option 3: default credentials (e.g. Google Cloud environment)
-                firebase_admin.initialize_app()
+            cred = credentials.Certificate(cred_path)
+
+        firebase_admin.initialize_app(cred)
 
     _db = firestore.client()
     return _db
