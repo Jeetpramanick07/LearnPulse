@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import firebase_admin
 from firebase_admin import credentials, firestore
 
@@ -12,16 +13,19 @@ def get_db():
         return _db
 
     if not firebase_admin._apps:
+        cred_b64  = os.getenv("FIREBASE_CREDENTIALS_B64")
         cred_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
 
-        if cred_json:
-            # ✅ Production (Render): load from environment variable
-            cred_dict = json.loads(cred_json)
+        if cred_b64:
+            # ✅ Best for Render: base64-encoded JSON avoids newline issues
+            cred_dict = json.loads(base64.b64decode(cred_b64).decode("utf-8"))
             cred = credentials.Certificate(cred_dict)
+        elif cred_json:
+            # Fallback: raw JSON string
+            cred = credentials.Certificate(json.loads(cred_json))
         else:
-            # ✅ Local development: load from serviceAccountKey.json file
-            cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", "serviceAccountKey.json")
-            cred = credentials.Certificate(cred_path)
+            # Local development: read from file
+            cred = credentials.Certificate("serviceAccountKey.json")
 
         firebase_admin.initialize_app(cred)
 
